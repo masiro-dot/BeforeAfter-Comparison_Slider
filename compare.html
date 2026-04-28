@@ -17,13 +17,16 @@
             position: relative;
             flex-grow: 1;
             width: 100%;
+            height: 100%;
             overflow: hidden;
             background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             cursor: ew-resize;
         }
 
-        /* Canvasを使用して録画を制御 */
-        canvas { display: block; width: 100%; height: 100%; object-fit: contain; }
+        canvas { max-width: 100%; max-height: 100%; object-fit: contain; }
 
         .controls {
             padding: 25px;
@@ -67,7 +70,7 @@
 
 <div class="controls">
     <button id="record-btn">Auto Capture (MP4)</button>
-    <p class="hint">Automatic 1-cycle slide and save</p>
+    <p class="hint">Automatic comparison and save</p>
 </div>
 
 <script>
@@ -94,8 +97,19 @@
     });
 
     function resize() {
-        canvas.width = canvas.clientWidth * window.devicePixelRatio;
-        canvas.height = canvas.clientHeight * window.devicePixelRatio;
+        // 元の画像の比率に基づいてCanvasのサイズを決定
+        const containerWidth = canvas.parentElement.clientWidth;
+        const containerHeight = canvas.parentElement.clientHeight;
+        const imgAspect = imgBefore.width / imgBefore.height;
+        const containerAspect = containerWidth / containerHeight;
+
+        if (containerAspect > imgAspect) {
+            canvas.height = containerHeight * window.devicePixelRatio;
+            canvas.width = canvas.height * imgAspect;
+        } else {
+            canvas.width = containerWidth * window.devicePixelRatio;
+            canvas.height = canvas.width / imgAspect;
+        }
         render();
     }
     window.addEventListener('resize', resize);
@@ -105,8 +119,11 @@
         const w = canvas.width;
         const h = canvas.height;
         
+        ctx.clearRect(0, 0, w, h);
+        
         // Before描画
         ctx.drawImage(imgBefore, 0, 0, w, h);
+        
         // Afterをスライダー位置で切り取って描画
         ctx.save();
         ctx.beginPath();
@@ -115,30 +132,31 @@
         ctx.drawImage(imgAfter, 0, 0, w, h);
         ctx.restore();
 
-        // ライン
+        // スライダーライン
         ctx.strokeStyle = '#c9a96e';
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 4 * window.devicePixelRatio;
         ctx.beginPath();
         ctx.moveTo(w * sliderPos, 0);
         ctx.lineTo(w * sliderPos, h);
         ctx.stroke();
     }
 
-    // 手動操作
     const handleMove = (e) => {
-        const x = (e.pageX || (e.touches ? e.touches[0].pageX : 0)) - canvas.getBoundingClientRect().left;
-        sliderPos = Math.max(0, Math.min(1, x / canvas.clientWidth));
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.pageX || (e.touches ? e.touches[0].pageX : 0);
+        const x = clientX - rect.left;
+        sliderPos = Math.max(0, Math.min(1, x / rect.width));
         render();
     };
     canvas.addEventListener('mousemove', (e) => { if(e.buttons === 1) handleMove(e); });
     canvas.addEventListener('mousedown', handleMove);
+    canvas.addEventListener('touchstart', handleMove);
     canvas.addEventListener('touchmove', handleMove);
 
-    // --- 自動録画ロジック ---
     recordBtn.onclick = async () => {
         recordBtn.disabled = true;
         recordBtn.classList.add('recording');
-        status.textContent = "GENERATING VIDEO...";
+        status.textContent = "GENERATING MP4...";
 
         const stream = canvas.captureStream(30); 
         const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
@@ -149,7 +167,7 @@
             const blob = new Blob(chunks, { type: 'video/mp4' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.download = `masiro_auto_compare_${Date.now()}.mp4`;
+            a.download = `masiro_comparison_${Date.now()}.mp4`;
             a.href = url;
             a.click();
             
@@ -161,23 +179,34 @@
 
         recorder.start();
 
-        // 自動スライド開始 (1.5秒で1往復)
+        // --- 自動アニメーション設定 ---
         let startTime = null;
-        const duration = 3000; // 3秒
+        const duration = 6000; // 6秒かけてゆっくり動かす
 
         function animate(time) {
             if (!startTime) startTime = time;
             let progress = (time - startTime) / duration;
 
             if (progress <= 1) {
-                // 0.5 -> 1.0 -> 0.0 -> 0.5 の動き
-                sliderPos = 0.5 + Math.sin(progress * Math.PI * 2) * 0.5;
+                // 動き：0.5(中央) -> 0.0(左端) -> 1.0(右端)
+                // サイン波を使って滑らかに往復
+                sliderPos = 0.5 - Math.sin(progress * Math.PI) * 0.5;
+                
+                // 後半で右端(1.0)に向かうように調整
+                if (progress > 0.5) {
+                    sliderPos = (progress - 0.5) * 2;
+                } else {
+                    sliderPos = 0.5 - (progress * 2) * 0.5;
+                }
+
                 render();
                 requestAnimationFrame(animate);
             } else {
-                sliderPos = 0.5;
+                // 最後はスライダーを右端(1.0)に固定してAfterを表示
+                sliderPos = 1.0;
                 render();
-                setTimeout(() => recorder.stop(), 500);
+                // 1秒停止して余韻を残してから録画終了
+                setTimeout(() => recorder.stop(), 1000);
             }
         }
         requestAnimationFrame(animate);
