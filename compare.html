@@ -6,16 +6,54 @@
     <title>masiro | Multi-Comparison Studio</title>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital@1&family=Inter:wght@300;600&display=swap" rel="stylesheet">
     <style>
-        :root { --accent: #c9a96e; --bg: #000; }
+        :root { --accent: #c9a96e; --bg: #000; --btn-bg: #1a1a1a; }
         * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; }
         body { background: var(--bg); color: #fff; font-family: 'Inter', sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
 
-        header { padding: 20px 40px; display: flex; justify-content: space-between; align-items: center; z-index: 10; background: #000; border-bottom: 1px solid #111; }
+        /* Header UIの強化 */
+        header { 
+            padding: 15px 30px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            z-index: 10; 
+            background: #050505; 
+            border-bottom: 1px solid #222;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
         .logo { font-family: 'Cormorant Garamond', serif; font-size: 24px; letter-spacing: 0.15em; color: var(--accent); text-transform: lowercase; }
 
-        .file-inputs { display: flex; gap: 20px; align-items: center; }
-        .file-input-label { font-size: 10px; letter-spacing: 0.1em; color: #666; cursor: pointer; border: 1px solid #333; padding: 5px 12px; transition: all 0.3s; }
-        .file-input-label:hover { border-color: var(--accent); color: var(--accent); }
+        /* はっきりと見えるボタンデザイン */
+        .file-inputs { display: flex; gap: 15px; align-items: center; }
+        .file-input-label { 
+            font-size: 11px; 
+            font-weight: 600;
+            letter-spacing: 0.05em; 
+            color: #ddd; 
+            cursor: pointer; 
+            background: var(--btn-bg);
+            border: 1px solid #444; 
+            padding: 10px 20px; 
+            border-radius: 4px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .file-input-label::before {
+            content: '＋';
+            color: var(--accent);
+            font-size: 14px;
+        }
+        .file-input-label:hover { 
+            border-color: var(--accent); 
+            background: #252525;
+            transform: translateY(-1px);
+        }
+        .file-input-label.loaded {
+            border-color: #2e7d32;
+            background: #1b2e1b;
+        }
         input[type="file"] { display: none; }
 
         #comparison-container {
@@ -34,32 +72,41 @@
         canvas { max-width: 100%; max-height: 100%; object-fit: contain; }
 
         .controls {
-            padding: 25px;
+            padding: 20px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 10px;
-            background: #000;
-            border-top: 1px solid #111;
+            gap: 12px;
+            background: #050505;
+            border-top: 1px solid #222;
         }
 
         #record-btn {
-            padding: 12px 40px;
+            padding: 14px 50px;
             border: 1px solid var(--accent);
             background: transparent;
             color: var(--accent);
             cursor: pointer;
-            font-size: 11px;
+            font-size: 12px;
+            font-weight: 600;
             letter-spacing: 0.2em;
             text-transform: uppercase;
             transition: all 0.4s ease;
+            border-radius: 4px;
         }
-        #record-btn:hover:not(:disabled) { background: var(--accent); color: #000; }
-        #record-btn:disabled { opacity: 0.3; cursor: wait; }
-        #record-btn.recording { background: #900; border-color: #f00; color: #fff; }
+        #record-btn:hover:not(:disabled) { background: var(--accent); color: #000; box-shadow: 0 0 20px rgba(201, 169, 110, 0.3); }
+        #record-btn:disabled { opacity: 0.2; cursor: not-allowed; border-color: #333; color: #555; }
+        #record-btn.recording { background: #b71c1c; border-color: #ff5252; color: #fff; animation: pulse 2s infinite; }
 
-        .hint { font-size: 9px; color: #444; letter-spacing: 0.1em; text-transform: uppercase; }
-        #status { position: fixed; top: 90px; left: 50%; transform: translateX(-50%); font-size: 11px; color: var(--accent); z-index: 20; background: rgba(0,0,0,0.7); padding: 5px 15px; border-radius: 20px; }
+        .hint { font-size: 10px; color: #555; letter-spacing: 0.1em; text-transform: uppercase; }
+        #status { 
+            position: fixed; top: 85px; left: 50%; transform: translateX(-50%); 
+            font-size: 11px; font-weight: 600; color: var(--accent); z-index: 20; 
+            background: rgba(0,0,0,0.8); padding: 6px 20px; border: 1px solid #333; border-radius: 30px;
+            letter-spacing: 0.1em;
+        }
+
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
@@ -67,20 +114,20 @@
 <header>
     <div class="logo">masiro <span>Generator</span></div>
     <div class="file-inputs">
-        <label class="file-input-label">1. Select Before (Base)<input type="file" id="before-file" accept="image/*"></label>
-        <label class="file-input-label">2. Select After (Overlay)<input type="file" id="after-file" accept="image/*"></label>
+        <label class="file-input-label" id="label-before">Select Before (Base)<input type="file" id="before-file" accept="image/*"></label>
+        <label class="file-input-label" id="label-after">Select After (Overlay)<input type="file" id="after-file" accept="image/*"></label>
     </div>
 </header>
 
-<div id="status">Please Select Images</div>
+<div id="status">Images Required</div>
 
 <div id="comparison-container">
     <canvas id="compCanvas"></canvas>
 </div>
 
 <div class="controls">
-    <button id="record-btn" disabled>Waiting for Images</button>
-    <p class="hint">Automatic 2-cycle MP4 export</p>
+    <button id="record-btn" disabled>Ready to Capture</button>
+    <p class="hint">Automatic 2-cycle MP4 Motion Export</p>
 </div>
 
 <script>
@@ -90,6 +137,8 @@
     const status = document.getElementById('status');
     const beforeFile = document.getElementById('before-file');
     const afterFile = document.getElementById('after-file');
+    const labelBefore = document.getElementById('label-before');
+    const labelAfter = document.getElementById('label-after');
 
     let imgBefore = new Image();
     let imgAfter = new Image();
@@ -103,16 +152,22 @@
         reader.onload = (e) => {
             const img = isBefore ? imgBefore : imgAfter;
             img.onload = () => {
-                if (isBefore) beforeReady = true;
-                else afterReady = true;
+                if (isBefore) {
+                    beforeReady = true;
+                    labelBefore.classList.add('loaded');
+                    labelBefore.textContent = "Before: OK";
+                } else {
+                    afterReady = true;
+                    labelAfter.classList.add('loaded');
+                    labelAfter.textContent = "After: OK";
+                }
                 
                 if (beforeReady && afterReady) {
                     recordBtn.disabled = false;
-                    recordBtn.textContent = "Auto Capture (MP4)";
                     status.textContent = "Ready to Compare";
                     resize();
                 } else {
-                    status.textContent = isBefore ? "Before Loaded. Need After." : "After Loaded. Need Before.";
+                    status.textContent = "One more image needed";
                 }
             };
             img.src = e.target.result;
@@ -146,19 +201,13 @@
         const w = canvas.width;
         const h = canvas.height;
         ctx.clearRect(0, 0, w, h);
-
-        // 1. 底面にBeforeを描画
         ctx.drawImage(imgBefore, 0, 0, w, h);
-
-        // 2. 上にAfterをスライダーの位置まで描画 (スライダーより左側に表示)
         ctx.save();
         ctx.beginPath();
         ctx.rect(0, 0, w * sliderPos, h);
         ctx.clip();
         ctx.drawImage(imgAfter, 0, 0, w, h);
         ctx.restore();
-
-        // 3. スライダーライン
         ctx.strokeStyle = '#c9a96e';
         ctx.lineWidth = 4 * window.devicePixelRatio;
         ctx.beginPath();
@@ -170,58 +219,11 @@
     const handleMove = (e) => {
         if (!beforeReady || !afterReady) return;
         const rect = canvas.getBoundingClientRect();
-        const clientX = e.pageX || (e.touches ? e.touches[0].pageX : 0);
+        const clientX = (e.pageX || (e.touches ? e.touches[0].pageX : 0));
         sliderPos = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
         render();
     };
     canvas.addEventListener('mousemove', (e) => { if(e.buttons === 1) handleMove(e); });
     canvas.addEventListener('mousedown', handleMove);
     canvas.addEventListener('touchstart', handleMove);
-    canvas.addEventListener('touchmove', handleMove);
-
-    recordBtn.onclick = async () => {
-        recordBtn.disabled = true;
-        recordBtn.classList.add('recording');
-        status.textContent = "RECORDING...";
-
-        const stream = canvas.captureStream(30); 
-        const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
-        const chunks = [];
-        recorder.ondataavailable = e => chunks.push(e.data);
-        recorder.onstop = () => {
-            const blob = new Blob(chunks, { type: 'video/mp4' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.download = `masiro_visual_comparison.mp4`;
-            a.href = url;
-            a.click();
-            recordBtn.disabled = false;
-            recordBtn.classList.remove('recording');
-            status.textContent = "COMPLETED.";
-        };
-
-        recorder.start();
-        let startTime = null;
-        const duration = 10000; 
-
-        function animate(time) {
-            if (!startTime) startTime = time;
-            let progress = (time - startTime) / duration;
-            if (progress <= 1) {
-                // Before全開(0) -> After全開(1) -> Before全開(0) -> After全開(1)
-                // 位相を調整して 0 -> 1 -> 0 -> 1 の動きにする
-                const wave = -Math.cos(progress * Math.PI * 4); // -1から1への往復
-                sliderPos = (wave + 1) / 2;
-                render();
-                requestAnimationFrame(animate);
-            } else {
-                sliderPos = 1.0; // 最後はAfter画像(右端)で終了
-                render();
-                setTimeout(() => recorder.stop(), 1000);
-            }
-        }
-        requestAnimationFrame(animate);
-    };
-</script>
-</body>
-</html>
+    canvas.
