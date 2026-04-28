@@ -3,15 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>masiro | Auto Capture Studio</title>
+    <title>masiro | Multi-Comparison Studio</title>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital@1&family=Inter:wght@300;600&display=swap" rel="stylesheet">
     <style>
         :root { --accent: #c9a96e; --bg: #000; }
         * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-user-select: none; }
         body { background: var(--bg); color: #fff; font-family: 'Inter', sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
 
-        header { padding: 25px 40px; display: flex; justify-content: space-between; align-items: center; z-index: 10; background: #000; }
-        .logo { font-family: 'Cormorant Garamond', serif; font-size: 28px; letter-spacing: 0.15em; color: var(--accent); text-transform: lowercase; }
+        header { padding: 20px 40px; display: flex; justify-content: space-between; align-items: center; z-index: 10; background: #000; border-bottom: 1px solid #111; }
+        .logo { font-family: 'Cormorant Garamond', serif; font-size: 24px; letter-spacing: 0.15em; color: var(--accent); text-transform: lowercase; }
+
+        /* 画像選択エリア */
+        .file-inputs { display: flex; gap: 20px; align-items: center; }
+        .file-input-label { font-size: 10px; letter-spacing: 0.1em; color: #666; cursor: pointer; border: 1px solid #333; padding: 5px 12px; transition: all 0.3s; }
+        .file-input-label:hover { border-color: var(--accent); color: var(--accent); }
+        input[type="file"] { display: none; }
 
         #comparison-container {
             position: relative;
@@ -35,6 +41,7 @@
             align-items: center;
             gap: 10px;
             background: #000;
+            border-top: 1px solid #111;
         }
 
         #record-btn {
@@ -53,24 +60,28 @@
         #record-btn.recording { background: #900; border-color: #f00; color: #fff; }
 
         .hint { font-size: 9px; color: #444; letter-spacing: 0.1em; text-transform: uppercase; }
-        #status { position: fixed; top: 90px; left: 50%; transform: translateX(-50%); font-size: 11px; color: var(--accent); z-index: 20; }
+        #status { position: fixed; top: 90px; left: 50%; transform: translateX(-50%); font-size: 11px; color: var(--accent); z-index: 20; background: rgba(0,0,0,0.7); padding: 5px 15px; border-radius: 20px; }
     </style>
 </head>
 <body>
 
 <header>
-    <div class="logo">masiro <span>Auto Archive</span></div>
+    <div class="logo">masiro <span>Generator</span></div>
+    <div class="file-inputs">
+        <label class="file-input-label">1. Select Before<input type="file" id="before-file" accept="image/*"></label>
+        <label class="file-input-label">2. Select After<input type="file" id="after-file" accept="image/*"></label>
+    </div>
 </header>
 
-<div id="status"></div>
+<div id="status">Ready</div>
 
 <div id="comparison-container">
     <canvas id="compCanvas"></canvas>
 </div>
 
 <div class="controls">
-    <button id="record-btn">Auto Capture (MP4)</button>
-    <p class="hint">Automatic 2-cycle comparison and save</p>
+    <button id="record-btn" disabled>Please Select Images</button>
+    <p class="hint">Automatic 2-cycle MP4 export</p>
 </div>
 
 <script>
@@ -78,25 +89,44 @@
     const ctx = canvas.getContext('2d');
     const recordBtn = document.getElementById('record-btn');
     const status = document.getElementById('status');
+    const beforeFile = document.getElementById('before-file');
+    const afterFile = document.getElementById('after-file');
 
     let imgBefore = new Image();
     let imgAfter = new Image();
     let sliderPos = 0.5;
-    let isImagesLoaded = false;
+    let beforeReady = false;
+    let afterReady = false;
 
-    imgBefore.src = './images/before.webp';
-    imgAfter.src = './images/after.webp';
+    // ファイル読み込み処理
+    function handleFile(file, isBefore) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = isBefore ? imgBefore : imgAfter;
+            img.onload = () => {
+                if (isBefore) beforeReady = true;
+                else afterReady = true;
+                
+                if (beforeReady && afterReady) {
+                    recordBtn.disabled = false;
+                    recordBtn.textContent = "Auto Capture (MP4)";
+                    status.textContent = "Images Loaded.";
+                    resize();
+                } else {
+                    status.textContent = isBefore ? "Before Loaded. Select After." : "After Loaded. Select Before.";
+                }
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
 
-    Promise.all([
-        new Promise(r => imgBefore.onload = r),
-        new Promise(r => imgAfter.onload = r)
-    ]).then(() => {
-        isImagesLoaded = true;
-        resize();
-        render();
-    });
+    beforeFile.onchange = (e) => handleFile(e.target.files[0], true);
+    afterFile.onchange = (e) => handleFile(e.target.files[0], false);
 
     function resize() {
+        if (!beforeReady || !afterReady) return;
         const containerWidth = canvas.parentElement.clientWidth;
         const containerHeight = canvas.parentElement.clientHeight;
         const imgAspect = imgBefore.width / imgBefore.height;
@@ -114,33 +144,27 @@
     window.addEventListener('resize', resize);
 
     function render() {
-        if (!isImagesLoaded) return;
+        if (!beforeReady || !afterReady) return;
         const w = canvas.width;
         const h = canvas.height;
         ctx.clearRect(0, 0, w, h);
-        
         ctx.drawImage(imgBefore, 0, 0, w, h);
-        
         ctx.save();
         ctx.beginPath();
         ctx.rect(0, 0, w * sliderPos, h);
         ctx.clip();
         ctx.drawImage(imgAfter, 0, 0, w, h);
         ctx.restore();
-
         ctx.strokeStyle = '#c9a96e';
         ctx.lineWidth = 4 * window.devicePixelRatio;
-        ctx.beginPath();
-        ctx.moveTo(w * sliderPos, 0);
-        ctx.lineTo(w * sliderPos, h);
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(w * sliderPos, 0); ctx.lineTo(w * sliderPos, h); ctx.stroke();
     }
 
     const handleMove = (e) => {
+        if (!beforeReady || !afterReady) return;
         const rect = canvas.getBoundingClientRect();
         const clientX = e.pageX || (e.touches ? e.touches[0].pageX : 0);
-        const x = clientX - rect.left;
-        sliderPos = Math.max(0, Math.min(1, x / rect.width));
+        sliderPos = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
         render();
     };
     canvas.addEventListener('mousemove', (e) => { if(e.buttons === 1) handleMove(e); });
@@ -156,44 +180,35 @@
         const stream = canvas.captureStream(30); 
         const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
         const chunks = [];
-
         recorder.ondataavailable = e => chunks.push(e.data);
         recorder.onstop = () => {
             const blob = new Blob(chunks, { type: 'video/mp4' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.download = `masiro_visual_comparison_${Date.now()}.mp4`;
+            a.download = `masiro_compare_${Date.now()}.mp4`;
             a.href = url;
             a.click();
-            
             recordBtn.disabled = false;
             recordBtn.classList.remove('recording');
             status.textContent = "SAVED.";
-            setTimeout(() => status.textContent = "", 3000);
         };
 
         recorder.start();
-
-        // --- 自動アニメーション（2往復） ---
         let startTime = null;
-        const duration = 10000; // 10秒かけて2回往復
+        const duration = 10000; 
 
         function animate(time) {
             if (!startTime) startTime = time;
             let progress = (time - startTime) / duration;
-
             if (progress <= 1) {
-                // サイン波を利用して中央(0.5)からスタートし、2往復して最後を1.0(After)に調整
-                // 周期を2倍に設定
-                const wave = Math.sin(progress * Math.PI * 4 - Math.PI / 2); // -1から1へ
-                sliderPos = (wave + 1) / 2; // 0から1へ
-
+                const wave = Math.sin(progress * Math.PI * 4 - Math.PI / 2);
+                sliderPos = (wave + 1) / 2;
                 render();
                 requestAnimationFrame(animate);
             } else {
-                sliderPos = 1.0; // 最後はAfter画像で終了
+                sliderPos = 1.0;
                 render();
-                setTimeout(() => recorder.stop(), 1000); // 余韻
+                setTimeout(() => recorder.stop(), 1000);
             }
         }
         requestAnimationFrame(animate);
