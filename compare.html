@@ -13,7 +13,6 @@
         header { padding: 20px 40px; display: flex; justify-content: space-between; align-items: center; z-index: 10; background: #000; border-bottom: 1px solid #111; }
         .logo { font-family: 'Cormorant Garamond', serif; font-size: 24px; letter-spacing: 0.15em; color: var(--accent); text-transform: lowercase; }
 
-        /* 画像選択エリア */
         .file-inputs { display: flex; gap: 20px; align-items: center; }
         .file-input-label { font-size: 10px; letter-spacing: 0.1em; color: #666; cursor: pointer; border: 1px solid #333; padding: 5px 12px; transition: all 0.3s; }
         .file-input-label:hover { border-color: var(--accent); color: var(--accent); }
@@ -68,19 +67,19 @@
 <header>
     <div class="logo">masiro <span>Generator</span></div>
     <div class="file-inputs">
-        <label class="file-input-label">1. Select Before<input type="file" id="before-file" accept="image/*"></label>
-        <label class="file-input-label">2. Select After<input type="file" id="after-file" accept="image/*"></label>
+        <label class="file-input-label">1. Select Before (Base)<input type="file" id="before-file" accept="image/*"></label>
+        <label class="file-input-label">2. Select After (Overlay)<input type="file" id="after-file" accept="image/*"></label>
     </div>
 </header>
 
-<div id="status">Ready</div>
+<div id="status">Please Select Images</div>
 
 <div id="comparison-container">
     <canvas id="compCanvas"></canvas>
 </div>
 
 <div class="controls">
-    <button id="record-btn" disabled>Please Select Images</button>
+    <button id="record-btn" disabled>Waiting for Images</button>
     <p class="hint">Automatic 2-cycle MP4 export</p>
 </div>
 
@@ -98,7 +97,6 @@
     let beforeReady = false;
     let afterReady = false;
 
-    // ファイル読み込み処理
     function handleFile(file, isBefore) {
         if (!file) return;
         const reader = new FileReader();
@@ -111,10 +109,10 @@
                 if (beforeReady && afterReady) {
                     recordBtn.disabled = false;
                     recordBtn.textContent = "Auto Capture (MP4)";
-                    status.textContent = "Images Loaded.";
+                    status.textContent = "Ready to Compare";
                     resize();
                 } else {
-                    status.textContent = isBefore ? "Before Loaded. Select After." : "After Loaded. Select Before.";
+                    status.textContent = isBefore ? "Before Loaded. Need After." : "After Loaded. Need Before.";
                 }
             };
             img.src = e.target.result;
@@ -148,16 +146,25 @@
         const w = canvas.width;
         const h = canvas.height;
         ctx.clearRect(0, 0, w, h);
+
+        // 1. 底面にBeforeを描画
         ctx.drawImage(imgBefore, 0, 0, w, h);
+
+        // 2. 上にAfterをスライダーの位置まで描画 (スライダーより左側に表示)
         ctx.save();
         ctx.beginPath();
         ctx.rect(0, 0, w * sliderPos, h);
         ctx.clip();
         ctx.drawImage(imgAfter, 0, 0, w, h);
         ctx.restore();
+
+        // 3. スライダーライン
         ctx.strokeStyle = '#c9a96e';
         ctx.lineWidth = 4 * window.devicePixelRatio;
-        ctx.beginPath(); ctx.moveTo(w * sliderPos, 0); ctx.lineTo(w * sliderPos, h); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(w * sliderPos, 0);
+        ctx.lineTo(w * sliderPos, h);
+        ctx.stroke();
     }
 
     const handleMove = (e) => {
@@ -175,7 +182,7 @@
     recordBtn.onclick = async () => {
         recordBtn.disabled = true;
         recordBtn.classList.add('recording');
-        status.textContent = "GENERATING MP4...";
+        status.textContent = "RECORDING...";
 
         const stream = canvas.captureStream(30); 
         const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
@@ -185,12 +192,12 @@
             const blob = new Blob(chunks, { type: 'video/mp4' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.download = `masiro_compare_${Date.now()}.mp4`;
+            a.download = `masiro_visual_comparison.mp4`;
             a.href = url;
             a.click();
             recordBtn.disabled = false;
             recordBtn.classList.remove('recording');
-            status.textContent = "SAVED.";
+            status.textContent = "COMPLETED.";
         };
 
         recorder.start();
@@ -201,12 +208,14 @@
             if (!startTime) startTime = time;
             let progress = (time - startTime) / duration;
             if (progress <= 1) {
-                const wave = Math.sin(progress * Math.PI * 4 - Math.PI / 2);
+                // Before全開(0) -> After全開(1) -> Before全開(0) -> After全開(1)
+                // 位相を調整して 0 -> 1 -> 0 -> 1 の動きにする
+                const wave = -Math.cos(progress * Math.PI * 4); // -1から1への往復
                 sliderPos = (wave + 1) / 2;
                 render();
                 requestAnimationFrame(animate);
             } else {
-                sliderPos = 1.0;
+                sliderPos = 1.0; // 最後はAfter画像(右端)で終了
                 render();
                 setTimeout(() => recorder.stop(), 1000);
             }
