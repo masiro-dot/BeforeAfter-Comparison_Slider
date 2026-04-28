@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>masiro | Comparison Studio</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital@1&family=Inter:wght@300;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --accent: #c9a96e; --bg: #000; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: var(--bg); color: #fff; font-family: 'Inter', sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+
+        header { padding: 25px 40px; display: flex; justify-content: space-between; align-items: center; z-index: 10; background: #000; }
+        .logo { font-family: 'Cormorant Garamond', serif; font-size: 28px; letter-spacing: 0.15em; color: var(--accent); text-transform: lowercase; }
+        .logo span { font-size: 12px; color: #555; margin-left: 10px; letter-spacing: 0.3em; text-transform: uppercase; vertical-align: middle; }
+
+        /* 比較コンテナ（隙間なしフル画面） */
+        #comparison-container {
+            position: relative;
+            flex-grow: 1;
+            width: 100%;
+            overflow: hidden;
+            background: #000;
+            cursor: ew-resize;
+        }
+
+        .image-wrapper { position: absolute; inset: 0; width: 100%; height: 100%; }
+        .image-wrapper img { width: 100vw; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+
+        /* After画像（上に重なる可動側） */
+        #after-wrapper {
+            width: 50%;
+            z-index: 2;
+            overflow: hidden;
+            border-right: 1px solid rgba(201, 169, 110, 0.5);
+        }
+
+        /* スライダーハンドル */
+        #slider-handle {
+            position: absolute;
+            top: 0; bottom: 0; left: 50%;
+            width: 2px; background: var(--accent);
+            transform: translateX(-50%);
+            z-index: 3;
+            pointer-events: none;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+        }
+        #slider-handle::after {
+            content: '';
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 44px; height: 44px;
+            background: var(--bg);
+            border: 1px solid var(--accent);
+            border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+        }
+        #slider-handle::before {
+            content: '⟳'; /* 建築的な記号としての回転矢印 */
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: var(--accent); font-size: 18px; z-index: 4;
+        }
+
+        /* 録画コントロールパネル */
+        .controls {
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            background: #000;
+            border-top: 1px solid #111;
+        }
+
+        #record-btn {
+            padding: 12px 40px;
+            border: 1px solid var(--accent);
+            background: transparent;
+            color: var(--accent);
+            cursor: pointer;
+            font-size: 11px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            transition: all 0.4s cubic-bezier(0.2, 1, 0.3, 1);
+        }
+        #record-btn:hover { background: var(--accent); color: #000; }
+        #record-btn.recording { background: #900; border-color: #f00; color: #fff; animation: pulse 2s infinite; }
+
+        .hint { font-size: 9px; color: #444; letter-spacing: 0.1em; text-transform: uppercase; }
+
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.6; } 100% { opacity: 1; } }
+        #status { position: fixed; top: 90px; left: 50%; transform: translateX(-50%); font-size: 11px; color: var(--accent); letter-spacing: 0.1em; z-index: 20; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo">masiro <span>Studio Archive</span></div>
+</header>
+
+<div id="status"></div>
+
+<div id="comparison-container">
+    <div class="image-wrapper" id="before-wrapper">
+        <img src="./images/before.webp" alt="Before">
+    </div>
+    <div class="image-wrapper" id="after-wrapper">
+        <img src="./images/after.webp" alt="After">
+    </div>
+    <div id="slider-handle"></div>
+</div>
+
+<div class="controls">
+    <button id="record-btn">Capture Comparison</button>
+    <p class="hint">Record the transition and save as .mp4</p>
+</div>
+
+<script>
+    const container = document.getElementById('comparison-container');
+    const afterWrapper = document.getElementById('after-wrapper');
+    const handle = document.getElementById('slider-handle');
+    const recordBtn = document.getElementById('record-btn');
+    const status = document.getElementById('status');
+
+    let isResizing = false;
+
+    // スライダー操作ロジック
+    const move = (e) => {
+        if (!isResizing) return;
+        const rect = container.getBoundingClientRect();
+        let x = (e.pageX || (e.touches ? e.touches[0].pageX : 0)) - rect.left;
+        let width = container.offsetWidth;
+        
+        if (x < 0) x = 0;
+        if (x > width) x = width;
+        
+        const percent = (x / width) * 100;
+        afterWrapper.style.width = percent + '%';
+        handle.style.left = percent + '%';
+    };
+
+    container.addEventListener('mousedown', () => isResizing = true);
+    window.addEventListener('mouseup', () => isResizing = false);
+    window.addEventListener('mousemove', move);
+
+    container.addEventListener('touchstart', () => isResizing = true);
+    window.addEventListener('touchend', () => isResizing = false);
+    window.addEventListener('touchmove', move);
+
+    // --- 録画ロジック (ao360view仕様：mp4保存) ---
+    let mediaRecorder;
+    let recordedChunks = [];
+
+    recordBtn.onclick = async () => {
+        if (mediaRecorder && mediaRecorder.state === "recording") {
+            mediaRecorder.stop();
+            return;
+        }
+
+        try {
+            // 画面キャプチャの開始
+            const stream = await navigator.mediaDevices.getDisplayMedia({
+                video: { frameRate: { ideal: 30 } },
+                audio: false
+            });
+
+            recordedChunks = [];
+            // 互換性を考慮したWebM形式で録画
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) recordedChunks.push(e.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                // ダウンロード時に .mp4 という拡張子を付与
+                const blob = new Blob(recordedChunks, { type: 'video/mp4' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `masiro_visual_${Date.now()}.mp4`;
+                a.click();
+                
+                recordBtn.textContent = "Capture Comparison";
+                recordBtn.classList.remove('recording');
+                status.textContent = "MP4 SAVED.";
+                setTimeout(() => status.textContent = "", 3000);
+                
+                stream.getTracks().forEach(track => track.stop());
+            };
+
+            mediaRecorder.start();
+            recordBtn.textContent = "Recording...";
+            recordBtn.classList.add('recording');
+            status.textContent = "OPERATING SLIDER...";
+
+        } catch (err) {
+            console.error("Recording error:", err);
+            status.textContent = "ERROR: CAPTURE FAILED.";
+        }
+    };
+</script>
+</body>
+</html>
